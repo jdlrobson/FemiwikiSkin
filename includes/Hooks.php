@@ -272,6 +272,9 @@ class Hooks implements \MediaWiki\Linker\Hook\HtmlPageLinkRendererBeginHook {
 		}
 	}
 
+	public static function onSidebarBeforeOutput( Skin $skin, &$sidebar ) {
+	}
+
 	/**
 	 * Add default class to links which are not either 'external', 'stub', 'interwiki' or etc.
 	 * @inheritDoc

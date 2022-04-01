@@ -2,6 +2,8 @@
 
 namespace MediaWiki\Skins\Femiwiki;
 
+use Html;
+use Linker;
 use MediaWiki\MediaWikiServices;
 use OOUI\ButtonWidget;
 use OutputPage;
@@ -79,6 +81,7 @@ class SkinFemiwiki extends SkinMustache {
 	 * 'data-portlets-sidebar' also provides it, but it is divided into two parts.
 	 * The division is useful for Vector, but not useful for other skins.
 	 * @return array
+	 * @todo replace with SidebarBeforeOutput
 	 */
 	protected function getSidebar() {
 		$sidebarData = $this->buildSidebar();
@@ -93,12 +96,12 @@ class SkinFemiwiki extends SkinMustache {
 				foreach ( [ 'specialpages', 'upload' ] as $item ) {
 					unset( $items[$item] );
 				}
-				$toolbox = $this->getPortletData( $name, $items );
+				$toolbox = $this->getCustomPortletData( $name, $items );
 				continue;
 			} elseif ( in_array( $name, [ 'SEARCH', 'LANGUAGES' ] ) ) {
 				continue;
 			}
-			$sidebar[] = $this->getPortletData( $name, $items );
+			$sidebar[] = $this->getCustomPortletData( $name, $items );
 		}
 		return [ $sidebar, $toolbox ?? null ];
 	}
@@ -183,12 +186,65 @@ class SkinFemiwiki extends SkinMustache {
 		return $this->xeIconMap;
 	}
 
+	private static function getIconId( $menuName, $itemKey ) {
+		switch ( $menuName ) {
+			case 'user-menu':
+				return 'pt-' . $itemKey;
+			default:
+				return 'ca-' . $itemKey;
+				break;
+		}
+		return $id;
+	}
+
 	/**
 	 * Extends to prepend xe-icons
+	 *
 	 * @inheritDoc
 	 */
-	protected function getPortletData( $name, array $items ) {
+	protected function runOnSkinTemplateNavigationHooks( $skin, &$content_navigation ) {
+		parent::runOnSkinTemplateNavigationHooks( $skin, $content_navigation );
+
 		$xeIconMap = $this->getXeIconMap();
+		foreach ( $content_navigation as $name => $menuItems ) {
+			$icon = null;
+			foreach ( $menuItems as $key => $item ) {
+				$id = $item['id'] ?? self::getIconId( $name, $key );
+				if ( isset( $xeIconMap[$id] ) ) {
+					$icon = $xeIconMap[$id];
+				}
+
+				if ( $icon ) { 
+					$item['link-html'] = Html::rawElement(
+						'i',
+						[
+							'class' => 'xi-' . $icon,
+						],
+						Html::element( 'span', [], $item[ 'text' ] ?? '' )
+					);
+					$item['text'] = '';
+				}
+				$content_navigation[$name][$key] = $item;
+			}
+		}
+	}
+
+	/**
+	 * Generate data for a custom p-personal menu
+	 */
+	private function getCustomPortletData( $name, array $items ): array {
+		$id = Sanitizer::escapeIdForAttribute( "p-$name" );
+		$parentData = [
+			'id' => $id,
+			'class' => 'femi-custom-portlet mw-portlet ' . Sanitizer::escapeClass( "mw-portlet-personal" ),
+			'html-tooltip' => Linker::tooltip( $id ),
+			'html-items' => '',
+			'html-after-portal' => '',
+			'html-before-portal' => '',
+		];
+
+		$xeIconMap = $this->getXeIconMap();
+		//$xeIconMap[$id]
 
 		$htmlItems = '';
 		foreach ( $items as $key => $item ) {
@@ -208,11 +264,15 @@ class SkinFemiwiki extends SkinMustache {
 					],
 					'link-class' => 'xe-icons',
 				];
+			} else {
+				$options = [];
 			}
-			$htmlItems .= $this->makeListItem( $key, $item, $options ?? [] );
+			$htmlItems .= $this->makeListItem( $key, $item, $options );
 		}
-
-		$parentData = parent::getPortletData( $name, $items );
+		$msg = $this->msg( $name );
+		$parentData['label'] = $msg->exists() ? $msg->text() : $name;
+		$parentData['is-empty'] = count( $items ) === 0 && $content === '';
+		$parentData['class'] .= $parentData['is-empty'] ? ' emptyPortlet' : '';
 		$parentData['html-items'] = $htmlItems;
 		return $parentData;
 	}
